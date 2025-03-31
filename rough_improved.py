@@ -10,9 +10,8 @@ from abc import ABC, abstractmethod
 # ==========================
 
 # Custo para passar por terreno irregular (rough terrain)
-ROUGH_TERRAIN_COST = 3
+ROUGH_TERRAIN_COST = 2
 RECHARGE_VALUE = 60  # Valor de recarga da bateria
-# python3 main_routh_terrain.py --seed 3770486853704386 teste bom para comparar com o main_original # trocar o cost para 3 e 10
 
 
 class BasePlayer(ABC):
@@ -47,27 +46,28 @@ class DefaultPlayer(BasePlayer):
     current_battery = self.battery
     current_pos = self.position
 
-    # Prioridade máxima para recarregar se bateria crítica
-    if current_battery < 10:
-      path, cost = world.astar(current_pos, recharge_pos)
-      return (recharge_pos, path, cost)
+    # 1. Prioridade máxima para recarga se bateria < 10
+    # if current_battery < 10:
+    #   path, cost = world.astar(current_pos, recharge_pos)
+    #   return (recharge_pos, path, cost)
 
-    # Verifica pacotes no caminho para metas atuais
+    # 2. Se tem carga, verifica pacotes no caminho das metas
     if self.cargo > 0:
+      # Loop sobre metas para verificar pacotes intermediários
       for goal in world.goals.copy():
         path_to_goal, _ = world.astar(current_pos, goal)
-        # Verifica se há pacotes no caminho atual
         for pos in path_to_goal:
           if pos in world.packages:
-            # Calcula novo caminho direto para o pacote
+            # Coleta pacote no caminho
             pkg_path, pkg_cost = world.astar(current_pos, pos)
             return (pos, pkg_path, pkg_cost)
 
+    # 3. Se ainda tem carga, escolhe a meta mais eficiente
     if self.cargo > 0:
       best_goal = None
       min_total_cost = float('inf')
-
       for goal in world.goals.copy():
+        # Custo para meta + recarga pós-entrega
         path_to_goal, cost_to_goal = world.astar(current_pos, goal)
         path_to_recharge, cost_to_recharge = world.astar(goal, recharge_pos)
         total_cost = cost_to_goal + cost_to_recharge
@@ -78,18 +78,18 @@ class DefaultPlayer(BasePlayer):
 
       if best_goal:
         return best_goal
-      else:
+      else:  # Bateria insuficiente → recarrega
         path, cost = world.astar(current_pos, recharge_pos)
         return (recharge_pos, path, cost)
+
+    # 4. Sem carga: escolhe pacote + entrega + recarga
     else:
       best_pkg = None
       min_total = float('inf')
-
       for pkg in world.packages.copy():
         path_to_pkg, cost_to_pkg = world.astar(current_pos, pkg)
-
-        # Encontra a melhor combinação pacote->meta
         best_goal_cost = float('inf')
+        # Encontra o melhor custo pacote → meta → recarga
         for goal in world.goals.copy():
           path_pkg_to_goal, cost_pkg_to_goal = world.astar(pkg, goal)
           path_to_recharge, cost_to_recharge = world.astar(goal, recharge_pos)
@@ -100,12 +100,25 @@ class DefaultPlayer(BasePlayer):
           min_total = best_goal_cost
           best_pkg = (pkg, path_to_pkg, cost_to_pkg)
 
+      # 5. Se nenhum pacote viável, tenta recarregar
       if best_pkg:
         return best_pkg
       else:
+        if current_pos == recharge_pos:
+          # Tenta pacotes a partir da recarga
+          min_total = float('inf')
+          for pkg in world.packages.copy():
+            path_to_pkg, cost_to_pkg = world.astar(current_pos, pkg)
+            path_pkg_to_recharge, cost_pkg_to_recharge = world.astar(
+                pkg, recharge_pos)
+            total_cost = cost_to_pkg + cost_pkg_to_recharge
+            if total_cost <= current_battery and total_cost < min_total:
+              min_total = total_cost
+              best_pkg = (pkg, path_to_pkg, cost_to_pkg)
+          if best_pkg:
+            return best_pkg
+        # Recarrega como última opção
         path, cost = world.astar(current_pos, recharge_pos)
-        print(
-            f"Sem pacotes disponíveis. Recarregando bateria. Custo: {cost}, path: {path}")
         return (recharge_pos, path, cost)
 
 # ==========================
