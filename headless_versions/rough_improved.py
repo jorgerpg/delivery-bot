@@ -477,7 +477,7 @@ class Maze:
 
         if not self.headless:
           self.world.draw_world(self.path)
-        pygame.time.wait(self.delay)
+          pygame.time.wait(self.delay)
 
         if path_interrupted:
           break  # Recalcula novo caminho

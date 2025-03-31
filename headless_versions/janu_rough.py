@@ -458,7 +458,7 @@ class Maze:
           print("Bateria recarregada!")
         if not self.headless:
           self.world.draw_world(self.path)
-        pygame.time.wait(self.delay)
+          pygame.time.wait(self.delay)
 
       # Ao chegar ao alvo, processa a coleta ou entrega:
       if self.world.player.position == target:

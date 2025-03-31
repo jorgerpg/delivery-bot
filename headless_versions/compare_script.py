@@ -3,19 +3,30 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import argparse
 import random
+from concurrent.futures import ProcessPoolExecutor
+
+
+def run_script(script, seed, output_csv):
+  subprocess.run([
+      "python", script,
+      "--seed", str(seed),
+      "--headless",
+      "--output", output_csv
+  ])
 
 
 def run_comparison(scripts, num_runs, output_csv):
   seeds = [random.randint(0, 10**16) for _ in range(num_runs)]
 
-  for seed in seeds:
-    for script in scripts:
-      subprocess.run([
-          "python", script,
-          "--seed", str(seed),
-          "--headless",
-          "--output", output_csv
-      ])
+  with ProcessPoolExecutor() as executor:
+    futures = []
+    for seed in seeds:
+      for script in scripts:
+        futures.append(executor.submit(run_script, script, seed, output_csv))
+
+    # Aguarda a conclusão de todas as execuções
+    for future in futures:
+      future.result()
 
 
 def plot_results(csv_file):

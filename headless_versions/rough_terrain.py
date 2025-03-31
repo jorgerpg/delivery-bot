@@ -402,7 +402,7 @@ class Maze:
 
         if not self.headless:
           self.world.draw_world(self.path)
-        pygame.time.wait(self.delay)
+          pygame.time.wait(self.delay)
 
       # Processa coleta/entrega no destino final
       if self.world.player.position == target:
