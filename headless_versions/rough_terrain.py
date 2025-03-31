@@ -12,7 +12,7 @@ import os
 # ==========================
 
 # Custo para passar por terreno irregular (rough terrain)
-ROUGH_TERRAIN_COST = 3
+ROUGH_TERRAIN_COST = 10
 # python3 main_routh_terrain.py --seed 3770486853704386 teste bom para comparar com o main_original # trocar o cost para 3 e 10
 
 

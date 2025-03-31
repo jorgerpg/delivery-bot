@@ -12,7 +12,7 @@ import os
 # ==========================
 
 # Custo para passar por terreno irregular (rough terrain)
-ROUGH_TERRAIN_COST = 2
+ROUGH_TERRAIN_COST = 10
 RECHARGE_VALUE = 60  # Valor de recarga da bateria
 
 

@@ -2,8 +2,8 @@ import subprocess
 import pandas as pd
 import matplotlib.pyplot as plt
 import argparse
-import random
 from concurrent.futures import ProcessPoolExecutor
+import random
 
 
 def run_script(script, seed, output_csv):
@@ -15,8 +15,13 @@ def run_script(script, seed, output_csv):
   ])
 
 
-def run_comparison(scripts, num_runs, output_csv):
-  seeds = [random.randint(0, 10**16) for _ in range(num_runs)]
+def run_comparison(scripts, num_runs, output_csv, custom_seeds=None):
+  if custom_seeds:
+    seeds = custom_seeds
+    print(f"Using custom seeds: {seeds}")
+  else:
+    seeds = [random.randint(0, 10**16) for _ in range(num_runs)]
+    print(f"Generated random seeds: {seeds}")
 
   with ProcessPoolExecutor() as executor:
     futures = []
@@ -24,7 +29,7 @@ def run_comparison(scripts, num_runs, output_csv):
       for script in scripts:
         futures.append(executor.submit(run_script, script, seed, output_csv))
 
-    # Aguarda a conclusão de todas as execuções
+    # Wait for all executions
     for future in futures:
       future.result()
 
@@ -36,7 +41,7 @@ def plot_results(csv_file):
   grouped = df.groupby(['Script', 'Seed']).mean().reset_index()
 
   # Cria gráfico
-  fig, ax = plt.subplots(3, 1, figsize=(12, 15))
+  fig, ax = plt.subplots(4, 1, figsize=(12, 20))
 
   # Plot Scores
   scores = grouped.pivot(index='Seed', columns='Script', values='Score')
@@ -60,6 +65,13 @@ def plot_results(csv_file):
   ax[2].set_ylabel('Score/Steps Ratio')
   ax[2].legend(title='Script')
 
+  # Plot Average Score/Steps Ratio per Script
+  avg_ratio = grouped.groupby('Script')['Score/Steps'].mean()
+  avg_ratio.plot(kind='bar', ax=ax[3], color='skyblue')
+  ax[3].set_title('Average Score/Steps Ratio by Script')
+  ax[3].set_ylabel('Average Score/Steps Ratio')
+  ax[3].set_xlabel('Script')
+
   plt.tight_layout()
   plt.savefig('comparison.png')
   plt.close()
@@ -67,15 +79,26 @@ def plot_results(csv_file):
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(
-      description="Compare multiple delivery bot scripts")
-  parser.add_argument("scripts", nargs='+', help="List of scripts to compare")
+      description="Compare multiple delivery bot scripts",
+      formatter_class=argparse.ArgumentDefaultsHelpFormatter
+  )
+  parser.add_argument("scripts", nargs='+',
+                      help="Scripts to compare (e.g. algo1.py algo2.py)")
   parser.add_argument("--runs", type=int, default=5,
-                      help="Number of runs per seed")
+                      help="Number of runs when using random seeds")
+  parser.add_argument("--seeds", type=lambda s: [int(item) for item in s.split(',')],
+                      help="Comma-separated list of seeds to use (overrides --runs)")
   parser.add_argument("--output", default="comparison.csv",
-                      help="Output CSV file")
+                      help="Output CSV file name")
 
   args = parser.parse_args()
 
-  run_comparison(args.scripts, args.runs, args.output)
+  run_comparison(
+      scripts=args.scripts,
+      num_runs=args.runs,
+      output_csv=args.output,
+      custom_seeds=args.seeds
+  )
+
   plot_results(args.output)
-  print(f"Results saved to {args.output} and comparison.png")
+  print(f"\nResults saved to {args.output} and comparison.png")
