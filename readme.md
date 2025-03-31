@@ -17,7 +17,7 @@ Este projeto contém diversas versões do código original, cada uma com diferen
 **Descrição:** Implementação de uma nova lógica de escolha baseada no `rough_terrain`, e heuristica diferente da janu para levar em consideração o peso do terreno. Não volta para o carregador no fim. 
 
 ### 5. `main_janu_rough.py`
-**Descrição:** Implementação de uma nova lógica de escolha baseada no `rough_terrain`, e heuristica do janu. Volta para o carregador no fim.
+**Descrição:** Implementação de uma nova lógica de escolha baseada no `rough_terrain`, e heuristica do janu com a adição do calculo do rough_terrain no astar. Volta para o carregador no fim. validar qual o melhor processo.
 
 ### 6. `seeds de teste:`
   - 8192736887241304
