@@ -4,6 +4,8 @@ import heapq
 import sys
 import argparse
 from abc import ABC, abstractmethod
+import csv
+import os
 
 # ==========================
 # CLASSES DE PLAYER
@@ -117,7 +119,8 @@ class DefaultPlayer(BasePlayer):
 
 
 class World:
-  def __init__(self, seed=None):
+  def __init__(self, seed=None, headless=False):
+    self.headless = headless
     if seed is not None:
       random.seed(seed)
 
@@ -179,23 +182,24 @@ class World:
     self.rough_terrains = []
     self.generate_rough_terrain()  # Adicione esta linha após generate_obstacles()
 
-    # Inicializa a janela do Pygame
-    pygame.init()
-    self.screen = pygame.display.set_mode((self.width, self.height))
-    pygame.display.set_caption("Delivery Bot")
+    if not self.headless:
+      # Inicializa a janela do Pygame
+      pygame.init()
+      self.screen = pygame.display.set_mode((self.width, self.height))
+      pygame.display.set_caption("Delivery Bot")
 
-    # Carrega imagens para pacote, meta e recharger a partir de arquivos
-    self.package_image = pygame.image.load("images/cargo.png")
-    self.package_image = pygame.transform.scale(
-        self.package_image, (self.block_size, self.block_size))
+      # Carrega imagens para pacote, meta e recharger a partir de arquivos
+      self.package_image = pygame.image.load("images/cargo.png")
+      self.package_image = pygame.transform.scale(
+          self.package_image, (self.block_size, self.block_size))
 
-    self.goal_image = pygame.image.load("images/operator.png")
-    self.goal_image = pygame.transform.scale(
-        self.goal_image, (self.block_size, self.block_size))
+      self.goal_image = pygame.image.load("images/operator.png")
+      self.goal_image = pygame.transform.scale(
+          self.goal_image, (self.block_size, self.block_size))
 
-    self.recharger_image = pygame.image.load("images/charging-station.png")
-    self.recharger_image = pygame.transform.scale(
-        self.recharger_image, (self.block_size, self.block_size))
+      self.recharger_image = pygame.image.load("images/charging-station.png")
+      self.recharger_image = pygame.transform.scale(
+          self.recharger_image, (self.block_size, self.block_size))
 
     # Cores utilizadas para desenho (caso a imagem não seja usada)
     self.rough_color = (139, 69, 19)  # Cor para rough terrain
@@ -335,14 +339,17 @@ class World:
 
 
 class Maze:
-  def __init__(self, seed=None):
-    self.world = World(seed)
+  def __init__(self, seed=None, headless=False, output_file="results.csv"):
+    self.headless = headless
+    self.world = World(seed, headless)
     self.running = True
     self.score = 0
     self.steps = 0
     self.delay = 100  # milissegundos entre movimentos
     self.path = []
     self.num_deliveries = 0  # contagem de entregas realizadas
+    self.output_file = output_file
+    self.seed = seed
 
   def heuristic(self, a, b):
     # Distância de Manhattan
@@ -449,7 +456,8 @@ class Maze:
                 self.world.player.battery)
           self.world.player.battery = 60
           print("Bateria recarregada!")
-        self.world.draw_world(self.path)
+        if not self.headless:
+          self.world.draw_world(self.path)
         pygame.time.wait(self.delay)
 
       # Ao chegar ao alvo, processa a coleta ou entrega:
@@ -473,7 +481,23 @@ class Maze:
     print("Fim de jogo!")
     print("Pontuação final:", self.score)
     print("Total de passos:", self.steps)
+    # Gravação dos resultados
+    self._save_results()
     pygame.quit()
+
+  def _save_results(self):
+    file_exists = os.path.isfile(self.output_file)
+    with open(self.output_file, 'a', newline='') as f:
+      writer = csv.writer(f)
+      if not file_exists:
+        writer.writerow(['Seed', 'Score', 'Steps', 'Deliveries', 'Script'])
+      writer.writerow([
+          self.seed,
+          self.score,
+          self.steps,
+          self.num_deliveries,
+          os.path.basename(__file__)
+      ])
 
 
 # ==========================
@@ -489,7 +513,13 @@ if __name__ == "__main__":
       default=None,
       help="Valor do seed para recriar o mesmo mundo (opcional)."
   )
+  parser.add_argument(
+      "--headless",
+      action="store_true",
+      help="Executa em modo sem interface gráfica para coleta de dados"
+  )
+  parser.add_argument("--output", type=str, default="results.csv")
   args = parser.parse_args()
 
-  maze = Maze(seed=args.seed)
+  maze = Maze(seed=args.seed, headless=args.headless, output_file=args.output)
   maze.game_loop()

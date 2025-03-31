@@ -4,6 +4,8 @@ import heapq
 import sys
 import argparse
 from abc import ABC, abstractmethod
+import csv
+import os
 
 # ==========================
 # CLASSES DE PLAYER
@@ -11,6 +13,7 @@ from abc import ABC, abstractmethod
 
 # Custo para passar por terreno irregular (rough terrain)
 ROUGH_TERRAIN_COST = 2
+RECHARGE_VALUE = 60  # Valor de recarga da bateria
 
 
 class BasePlayer(ABC):
@@ -41,75 +44,84 @@ class DefaultPlayer(BasePlayer):
   """
 
   def escolher_alvo(self, world):
-    sx, sy = self.position
-    # Se não estiver carregando pacote e houver pacotes disponíveis:
+    recharge_pos = world.recharger
+    current_battery = self.battery
+    current_pos = self.position
 
-    if len(world.goals) == 0:
-      return world.recharger
+    # 1. Prioridade máxima para recarga se bateria < 10
+    # if current_battery < 10:
+    #   path, cost = world.astar(current_pos, recharge_pos)
+    #   return (recharge_pos, path, cost)
 
-    if world.packages:
-      best = None
-      best_dist = float('inf')
+    # 2. Se tem carga, verifica pacotes no caminho das metas
+    if self.cargo > 0:
+      # Loop sobre metas para verificar pacotes intermediários
+      for goal in world.goals.copy():
+        path_to_goal, _ = world.astar(current_pos, goal)
+        for pos in path_to_goal:
+          if pos in world.packages:
+            # Coleta pacote no caminho
+            pkg_path, pkg_cost = world.astar(current_pos, pos)
+            return (pos, pkg_path, pkg_cost)
 
-      if len(world.packages) == 1 and len(world.goals) == 1:
-        d_package = abs(world.packages[0][0] - sx) + \
-            abs(world.packages[0][1] - sy)
-        d_goal = abs(world.goals[0][0] - world.packages[0][0]) + \
-            abs(world.goals[0][1] - world.packages[0][1])
+    # 3. Se ainda tem carga, escolhe a meta mais eficiente
+    if self.cargo > 0:
+      best_goal = None
+      min_total_cost = float('inf')
+      for goal in world.goals.copy():
+        # Custo para meta + recarga pós-entrega
+        path_to_goal, cost_to_goal = world.astar(current_pos, goal)
+        path_to_recharge, cost_to_recharge = world.astar(goal, recharge_pos)
+        total_cost = cost_to_goal + cost_to_recharge
 
-        if (d_package + d_goal + 5) > self.battery:
-          if ((abs(world.recharger[0] - sx) + abs(world.recharger[1] - sy)) != 0) and abs(world.recharger[0] - sx) + abs(world.recharger[1] - sy) < self.battery:
-            return world.recharger
+        if total_cost <= current_battery and total_cost < min_total_cost:
+          min_total_cost = total_cost
+          best_goal = (goal, path_to_goal, cost_to_goal)
 
-          print("Battery: ", self.battery,
-                "Distance to compleate: ", (d_package + d_goal + 5))
-          return None
-        return world.packages[0]
+      if best_goal:
+        return best_goal
+      else:  # Bateria insuficiente → recarrega
+        path, cost = world.astar(current_pos, recharge_pos)
+        return (recharge_pos, path, cost)
+
+    # 4. Sem carga: escolhe pacote + entrega + recarga
+    else:
+      best_pkg = None
+      min_total = float('inf')
+      for pkg in world.packages.copy():
+        path_to_pkg, cost_to_pkg = world.astar(current_pos, pkg)
+        best_goal_cost = float('inf')
+        # Encontra o melhor custo pacote → meta → recarga
+        for goal in world.goals.copy():
+          path_pkg_to_goal, cost_pkg_to_goal = world.astar(pkg, goal)
+          path_to_recharge, cost_to_recharge = world.astar(goal, recharge_pos)
+          total = cost_to_pkg + cost_pkg_to_goal + cost_to_recharge
+          best_goal_cost = min(best_goal_cost, total)
+
+        if best_goal_cost <= current_battery and best_goal_cost < min_total:
+          min_total = best_goal_cost
+          best_pkg = (pkg, path_to_pkg, cost_to_pkg)
+
+      # 5. Se nenhum pacote viável, tenta recarregar
+      if best_pkg:
+        return best_pkg
       else:
-        for pkg in world.packages:
-          d = abs(pkg[0] - sx) + abs(pkg[1] - sy)
-          if d < best_dist:
-            best_dist = d
-            best = pkg
-
-        if world.goals and self.cargo > 0:
-          for goal in world.goals:
-            d = abs(goal[0] - sx) + abs(goal[1] - sy)
-            if d < best_dist:
-              best_dist = d
-              best = goal
-
-        d_self_goal = abs(best[0] - sx) + abs(best[1] - sy)
-        d_self_recharge = abs(
-            world.recharger[0] - sx) + abs(world.recharger[1] - sy)
-        d_goal_recharge = abs(
-            best[0] - world.recharger[0]) + abs(best[1] - world.recharger[1])
-
-        if (d_self_goal + d_goal_recharge + 5) > self.battery:
-          return world.recharger
-        return best
-    elif self.cargo > 0:
-      # Se estiver carregando ou não houver mais pacotes, vai para a meta de entrega (se existir)
-      if world.goals:
-        best = None
-        best_dist = float('inf')
-        for goal in world.goals:
-          d = abs(goal[0] - sx) + abs(goal[1] - sy)
-          if d < best_dist:
-            best_dist = d
-            best = goal
-
-        d_self_goal = abs(best[0] - sx) + abs(best[1] - sy)
-        d_self_recharge = abs(
-            world.recharger[0] - sx) + abs(world.recharger[1] - sy)
-        d_goal_recharge = abs(
-            best[0] - world.recharger[0]) + abs(best[1] - world.recharger[1])
-
-        if (d_self_goal + d_goal_recharge) > self.battery:
-          return world.recharger
-        return best
-      else:
-        return None
+        if current_pos == recharge_pos:
+          # Tenta pacotes a partir da recarga
+          min_total = float('inf')
+          for pkg in world.packages.copy():
+            path_to_pkg, cost_to_pkg = world.astar(current_pos, pkg)
+            path_pkg_to_recharge, cost_pkg_to_recharge = world.astar(
+                pkg, recharge_pos)
+            total_cost = cost_to_pkg + cost_pkg_to_recharge
+            if total_cost <= current_battery and total_cost < min_total:
+              min_total = total_cost
+              best_pkg = (pkg, path_to_pkg, cost_to_pkg)
+          if best_pkg:
+            return best_pkg
+        # Recarrega como última opção
+        path, cost = world.astar(current_pos, recharge_pos)
+        return (recharge_pos, path, cost)
 
 # ==========================
 # CLASSE WORLD (MUNDO)
@@ -117,7 +129,8 @@ class DefaultPlayer(BasePlayer):
 
 
 class World:
-  def __init__(self, seed=None):
+  def __init__(self, seed=None, headless=False):
+    self.headless = headless
     if seed is not None:
       random.seed(seed)
 
@@ -179,23 +192,24 @@ class World:
     self.rough_terrains = []
     self.generate_rough_terrain()  # Adicione esta linha após generate_obstacles()
 
-    # Inicializa a janela do Pygame
-    pygame.init()
-    self.screen = pygame.display.set_mode((self.width, self.height))
-    pygame.display.set_caption("Delivery Bot")
+    if not self.headless:
+      # Inicializa a janela do Pygame
+      pygame.init()
+      self.screen = pygame.display.set_mode((self.width, self.height))
+      pygame.display.set_caption("Delivery Bot")
 
-    # Carrega imagens para pacote, meta e recharger a partir de arquivos
-    self.package_image = pygame.image.load("images/cargo.png")
-    self.package_image = pygame.transform.scale(
-        self.package_image, (self.block_size, self.block_size))
+      # Carrega imagens para pacote, meta e recharger a partir de arquivos
+      self.package_image = pygame.image.load("images/cargo.png")
+      self.package_image = pygame.transform.scale(
+          self.package_image, (self.block_size, self.block_size))
 
-    self.goal_image = pygame.image.load("images/operator.png")
-    self.goal_image = pygame.transform.scale(
-        self.goal_image, (self.block_size, self.block_size))
+      self.goal_image = pygame.image.load("images/operator.png")
+      self.goal_image = pygame.transform.scale(
+          self.goal_image, (self.block_size, self.block_size))
 
-    self.recharger_image = pygame.image.load("images/charging-station.png")
-    self.recharger_image = pygame.transform.scale(
-        self.recharger_image, (self.block_size, self.block_size))
+      self.recharger_image = pygame.image.load("images/charging-station.png")
+      self.recharger_image = pygame.transform.scale(
+          self.recharger_image, (self.block_size, self.block_size))
 
     # Cores utilizadas para desenho (caso a imagem não seja usada)
     self.rough_color = (139, 69, 19)  # Cor para rough terrain
@@ -329,28 +343,16 @@ class World:
     pygame.draw.rect(self.screen, self.player_color, rect)
     pygame.display.flip()
 
-# ==========================
-# CLASSE MAZE: Lógica do jogo e planejamento de caminhos (A*)
-# ==========================
-
-
-class Maze:
-  def __init__(self, seed=None):
-    self.world = World(seed)
-    self.running = True
-    self.score = 0
-    self.steps = 0
-    self.delay = 100  # milissegundos entre movimentos
-    self.path = []
-    self.num_deliveries = 0  # contagem de entregas realizadas
-
   def heuristic(self, a, b):
-    # Distância de Manhattan
-    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+    base_cost = abs(a[0] - b[0]) + abs(a[1] - b[1])
+    # Prioriza células com pacotes
+    if self.map[a[1]][a[0]] == 2:
+      return base_cost - 20
+    return base_cost
 
   def astar(self, start, goal):
-    maze = self.world.map
-    size = self.world.maze_size
+    maze = self.map
+    size = self.maze_size
     neighbors = [(1, 0), (-1, 0), (0, 1), (0, -1)]
     close_set = set()
     came_from = {}
@@ -362,72 +364,102 @@ class Maze:
       current = heapq.heappop(oheap)[1]
       if list(current) == goal:
         data = []
+        total_cost = gscore[current]
         while current in came_from:
           data.append(list(current))
           current = came_from[current]
         data.reverse()
-        return data
+        return data, total_cost
+
       close_set.add(current)
       for dx, dy in neighbors:
         neighbor = (current[0] + dx, current[1] + dy)
-        tentative_g = gscore[current] + 1
+        # Verifica se está dentro dos limites do grid
         if 0 <= neighbor[0] < size and 0 <= neighbor[1] < size:
-          # Parede, caminho bloqueado
+          # Pula obstáculos intransponíveis (paredes)
           if maze[neighbor[1]][neighbor[0]] == 1:
             continue
-
           # Calcula custo do terreno (ROUGH_TERRAIN_COST para rough terrain, 1 para normal)
           terrain_cost = ROUGH_TERRAIN_COST if maze[neighbor[1]
                                                     ][neighbor[0]] == 2 else 1
         else:
           continue  # Fora dos limites do grid
-
         tentative_g = gscore[current] + terrain_cost
         if neighbor in close_set and tentative_g >= gscore.get(neighbor, 0):
           continue
-
-        # Melhor caminho até então
         if tentative_g < gscore.get(neighbor, float('inf')) or neighbor not in [i[1] for i in oheap]:
           came_from[neighbor] = current
           gscore[neighbor] = tentative_g
           fscore[neighbor] = tentative_g + self.heuristic(neighbor, goal)
           heapq.heappush(oheap, (fscore[neighbor], neighbor))
-    return []
+
+    return [], float('inf')
+
+# ==========================
+# CLASSE MAZE: Lógica do jogo e planejamento de caminhos (A*)
+# ==========================
+
+
+class Maze:
+  def __init__(self, seed=None, headless=False, output_file="results.csv"):
+    self.headless = headless
+    self.world = World(seed, headless)
+    self.running = True
+    self.score = 0
+    self.steps = 0
+    self.delay = 100  # milissegundos entre movimentos
+    self.path = []
+    self.num_deliveries = 0  # contagem de entregas realizadas
+    self.output_file = output_file
+    self.seed = seed
 
   def game_loop(self):
     # O jogo termina quando o número de entregas realizadas é igual ao total de itens.
     while self.running:
-      if self.num_deliveries >= self.world.total_items and ((abs(self.world.recharger[0] - self.world.player.position[0]) + abs(self.world.recharger[1] - self.world.player.position[1])) == 0):
-        print("Entrou aqui: ", ((abs(self.world.recharger[0] - self.world.player.position[0]) + abs(
-            self.world.recharger[1] - self.world.player.position[1]))))
+      if self.num_deliveries >= self.world.total_items:
         self.running = False
         break
 
-      # Utiliza a estratégia do jogador para escolher o alvo
-      target = self.world.player.escolher_alvo(self.world)
-      if target is None:
-        print("No more target")
+      target, path, cost = self.world.player.escolher_alvo(self.world)
+
+      if not path:
+        print(
+            f"Nenhum caminho encontrado para o alvo {target} custo: {cost}, path: {path}")
         self.running = False
         break
 
-      self.path = self.astar(self.world.player.position, target)
-      if not self.path:
-        print("Nenhum caminho encontrado para o alvo", target)
-        self.running = False
-        break
+      self.path = path
+      path_interrupted = False
 
-      # Segue o caminho calculado
       for pos in self.path:
         self.world.player.position = pos
         self.steps += 1
 
-        # Determina o custo do terreno
-        x, y = pos
+        # Verifica elementos na posição atual
+        current_pos = self.world.player.position
+
+        # Coleta dinâmica de pacotes
+        if current_pos in self.world.packages:
+          self.world.player.cargo += 1
+          self.world.packages.remove(current_pos)
+          print(f"Pacote coletado! Carga atual: {self.world.player.cargo}")
+          path_interrupted = True
+
+        # Entrega dinâmica
+        if current_pos in self.world.goals and self.world.player.cargo > 0:
+          self.world.player.cargo -= 1
+          self.num_deliveries += 1
+          self.world.goals.remove(current_pos)
+          print(
+              f"Entrega realizada! Total: {self.num_deliveries}/{self.world.total_items}")
+          self.score += 50
+          path_interrupted = True
+
+        # Atualiza bateria
+        x, y = current_pos
         cell_value = self.world.map[y][x]
         if cell_value == 2:
           terrain_cost = ROUGH_TERRAIN_COST  # ROUGH_TERRAIN_COST para rough terrain
-          print(
-              f"Passando por rough terrain em {pos}! Bateria -{ROUGH_TERRAIN_COST}")
         elif cell_value == 0:
           terrain_cost = 1
 
@@ -436,44 +468,41 @@ class Maze:
         if self.world.player.battery >= 0:
           self.score -= terrain_cost  # Penalidade proporcional ao terreno
         else:
-          self.running = False
-          print("Bateria descarregada! Entregas faltantes: ",
-                (self.world.total_items - self.num_deliveries))
+          self.score -= 5  # Penalidade maior se bateria negativa
 
-          self.score -= (self.world.total_items - self.num_deliveries) * 25
-          self.score -= 25
-          break
-        # Recarrega a bateria se estiver no recharger
+        # Verifica recarga
         if self.world.recharger and pos == self.world.recharger:
-          print("Chegou na estação de recarga com bateira em: ",
-                self.world.player.battery)
-          self.world.player.battery = 60
+          self.world.player.battery = RECHARGE_VALUE
           print("Bateria recarregada!")
-        self.world.draw_world(self.path)
+
+        if not self.headless:
+          self.world.draw_world(self.path)
         pygame.time.wait(self.delay)
 
-      # Ao chegar ao alvo, processa a coleta ou entrega:
-      if self.world.player.position == target:
-        # Se for local de coleta, pega o pacote.
-        if target in self.world.packages:
-          self.world.player.cargo += 1
-          self.world.packages.remove(target)
-          print("Pacote coletado em", target,
-                "Cargo agora:", self.world.player.cargo)
-        # Se for local de entrega e o jogador tiver pelo menos um pacote, entrega.
-        elif target in self.world.goals and self.world.player.cargo > 0:
-          self.world.player.cargo -= 1
-          self.num_deliveries += 1
-          self.world.goals.remove(target)
-          self.score += 50
-          print("Pacote entregue em", target,
-                "Cargo agora:", self.world.player.cargo)
+        if path_interrupted:
+          break  # Recalcula novo caminho
       print(f"Passos: {self.steps}, Pontuação: {self.score}, Cargo: {self.world.player.cargo}, Bateria: {self.world.player.battery}, Entregas: {self.num_deliveries}")
 
     print("Fim de jogo!")
     print("Pontuação final:", self.score)
     print("Total de passos:", self.steps)
+    # Gravação dos resultados
+    self._save_results()
     pygame.quit()
+
+  def _save_results(self):
+    file_exists = os.path.isfile(self.output_file)
+    with open(self.output_file, 'a', newline='') as f:
+      writer = csv.writer(f)
+      if not file_exists:
+        writer.writerow(['Seed', 'Score', 'Steps', 'Deliveries', 'Script'])
+      writer.writerow([
+          self.seed,
+          self.score,
+          self.steps,
+          self.num_deliveries,
+          os.path.basename(__file__)
+      ])
 
 
 # ==========================
@@ -489,7 +518,13 @@ if __name__ == "__main__":
       default=None,
       help="Valor do seed para recriar o mesmo mundo (opcional)."
   )
+  parser.add_argument(
+      "--headless",
+      action="store_true",
+      help="Executa em modo sem interface gráfica para coleta de dados"
+  )
+  parser.add_argument("--output", type=str, default="results.csv")
   args = parser.parse_args()
 
-  maze = Maze(seed=args.seed)
+  maze = Maze(seed=args.seed, headless=args.headless, output_file=args.output)
   maze.game_loop()
