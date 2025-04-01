@@ -430,9 +430,7 @@ class Maze:
           self.score -= terrain_cost  # Penalidade proporcional ao terreno
         else:
           self.running = False
-
           self.score -= (self.world.total_items - self.num_deliveries) * 25
-          self.score -= 25
           break
         # Recarrega a bateria se estiver no recharger
         if self.world.recharger and pos == self.world.recharger:

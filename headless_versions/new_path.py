@@ -60,7 +60,7 @@ class DefaultPlayer(BasePlayer):
         package_path, d_package = world.astar(current_pos, world.packages[0])
         goal_path, d_goal = world.astar(world.packages[0], world.goals[0])
 
-        if (d_package + d_goal + 1) > self.battery:
+        if (d_package + d_goal) > self.battery:
           recharger_path, recharger_dist = world.astar(current_pos, world.recharger)
           if recharger_dist and recharger_dist < self.battery:
             return recharger_path, world.recharger
@@ -86,7 +86,7 @@ class DefaultPlayer(BasePlayer):
         self_recharger_path, self_recharger_dist = world.astar(current_pos, world.recharger)
         best_recharger_path, best_recharger_dist = world.astar(best, world.recharger)
 
-        if (best_dist + best_recharger_dist + 1) > self.battery:
+        if (best_dist + best_recharger_dist) > self.battery:
           return self_recharger_path, world.recharger
         
         return best_path, best
@@ -428,7 +428,6 @@ class Maze:
           self.running = False
 
           self.score -= (self.world.total_items - self.num_deliveries) * 25
-          self.score -= 25
           break
         # Recarrega a bateria se estiver no recharger
         if self.world.recharger and pos == self.world.recharger:

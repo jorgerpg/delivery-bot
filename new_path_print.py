@@ -4,8 +4,6 @@ import heapq
 import sys
 import argparse
 from abc import ABC, abstractmethod
-import csv
-import os
 
 # ==========================
 # CLASSES DE PLAYER
@@ -60,7 +58,7 @@ class DefaultPlayer(BasePlayer):
         package_path, d_package = world.astar(current_pos, world.packages[0])
         goal_path, d_goal = world.astar(world.packages[0], world.goals[0])
 
-        if (d_package + d_goal + 5) > self.battery:
+        if (d_package + d_goal) > self.battery:
           recharger_path, recharger_dist = world.astar(current_pos, world.recharger)
           if recharger_dist and recharger_dist < self.battery:
             return recharger_path, world.recharger
@@ -89,7 +87,7 @@ class DefaultPlayer(BasePlayer):
         self_recharger_path, self_recharger_dist = world.astar(current_pos, world.recharger)
         best_recharger_path, best_recharger_dist = world.astar(best, world.recharger)
 
-        if (best_dist + best_recharger_dist + 5) > self.battery:
+        if (best_dist + best_recharger_dist) > self.battery:
           return self_recharger_path, world.recharger
         
         return best_path, best
@@ -121,8 +119,7 @@ class DefaultPlayer(BasePlayer):
 
 
 class World:
-  def __init__(self, seed=None, headless=False):
-    self.headless = headless
+  def __init__(self, seed=None):
     if seed is not None:
       random.seed(seed)
 
@@ -184,24 +181,23 @@ class World:
     self.rough_terrains = []
     self.generate_rough_terrain()  # Adicione esta linha após generate_obstacles()
 
-    if not self.headless:
-      # Inicializa a janela do Pygame
-      pygame.init()
-      self.screen = pygame.display.set_mode((self.width, self.height))
-      pygame.display.set_caption("Delivery Bot")
+    # Inicializa a janela do Pygame
+    pygame.init()
+    self.screen = pygame.display.set_mode((self.width, self.height))
+    pygame.display.set_caption("Delivery Bot")
 
-      # Carrega imagens para pacote, meta e recharger a partir de arquivos
-      self.package_image = pygame.image.load("images/cargo.png")
-      self.package_image = pygame.transform.scale(
-          self.package_image, (self.block_size, self.block_size))
+    # Carrega imagens para pacote, meta e recharger a partir de arquivos
+    self.package_image = pygame.image.load("images/cargo.png")
+    self.package_image = pygame.transform.scale(
+        self.package_image, (self.block_size, self.block_size))
 
-      self.goal_image = pygame.image.load("images/operator.png")
-      self.goal_image = pygame.transform.scale(
-          self.goal_image, (self.block_size, self.block_size))
+    self.goal_image = pygame.image.load("images/operator.png")
+    self.goal_image = pygame.transform.scale(
+        self.goal_image, (self.block_size, self.block_size))
 
-      self.recharger_image = pygame.image.load("images/charging-station.png")
-      self.recharger_image = pygame.transform.scale(
-          self.recharger_image, (self.block_size, self.block_size))
+    self.recharger_image = pygame.image.load("images/charging-station.png")
+    self.recharger_image = pygame.transform.scale(
+        self.recharger_image, (self.block_size, self.block_size))
 
     # Cores utilizadas para desenho (caso a imagem não seja usada)
     self.rough_color = (139, 69, 19)  # Cor para rough terrain
@@ -390,16 +386,14 @@ class World:
 
 
 class Maze:
-  def __init__(self, seed=None, headless=False, output_file="results.csv"):
-    self.headless = headless
-    self.world = World(seed, headless)
+  def __init__(self, seed=None):
+    self.world = World(seed)
     self.running = True
     self.score = 0
     self.steps = 0
     self.delay = 100  # milissegundos entre movimentos
     self.path = []
     self.num_deliveries = 0  # contagem de entregas realizadas
-    self.output_file = output_file
     self.seed = seed
 
   def game_loop(self):
@@ -443,7 +437,6 @@ class Maze:
                 (self.world.total_items - self.num_deliveries))
 
           self.score -= (self.world.total_items - self.num_deliveries) * 25
-          self.score -= 25
           break
         # Recarrega a bateria se estiver no recharger
         if self.world.recharger and pos == self.world.recharger:
@@ -477,20 +470,6 @@ class Maze:
     print("Total de passos:", self.steps)
     pygame.quit()
 
-  def _save_results(self):
-    file_exists = os.path.isfile(self.output_file)
-    with open(self.output_file, 'a', newline='') as f:
-      writer = csv.writer(f)
-      if not file_exists:
-        writer.writerow(['Seed', 'Score', 'Steps', 'Deliveries', 'Script'])
-      writer.writerow([
-          self.seed,
-          self.score,
-          self.steps,
-          self.num_deliveries,
-          os.path.basename(__file__)
-      ])
-
 
 # ==========================
 # PONTO DE ENTRADA PRINCIPAL
@@ -505,13 +484,7 @@ if __name__ == "__main__":
       default=None,
       help="Valor do seed para recriar o mesmo mundo (opcional)."
   )
-  parser.add_argument(
-      "--headless",
-      action="store_true",
-      help="Executa em modo sem interface gráfica para coleta de dados"
-  )
-  parser.add_argument("--output", type=str, default="results.csv")
   args = parser.parse_args()
 
-  maze = Maze(seed=args.seed, headless=args.headless, output_file=args.output)
+  maze = Maze(seed=args.seed)
   maze.game_loop()
