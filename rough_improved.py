@@ -46,11 +46,11 @@ class DefaultPlayer(BasePlayer):
     current_battery = self.battery
     current_pos = self.position
 
-    # 1. Prioridade máxima para recarga se bateria < 10
-    # if current_battery < 10:
-    #   path, cost = world.astar(current_pos, recharge_pos)
-    #   return (recharge_pos, path, cost)
-
+    if len(world.goals) == 0:
+      # Recarrega como última opção
+      path, cost = world.astar(current_pos, recharge_pos)
+      return (recharge_pos, path, cost)
+    
     # 2. Se tem carga, verifica pacotes no caminho das metas
     if self.cargo > 0:
       # Loop sobre metas para verificar pacotes intermediários
@@ -409,9 +409,6 @@ class Maze:
   def game_loop(self):
     # O jogo termina quando o número de entregas realizadas é igual ao total de itens.
     while self.running:
-      if self.num_deliveries >= self.world.total_items:
-        self.running = False
-        break
 
       target, path, cost = self.world.player.escolher_alvo(self.world)
 

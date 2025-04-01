@@ -405,7 +405,6 @@ class Maze:
           self.num_deliveries += 1
           self.world.goals.remove(target)
           self.score += 50
-          
     # Gravação dos resultados
     self._save_results()
     pygame.quit()

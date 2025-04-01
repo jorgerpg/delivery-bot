@@ -4,6 +4,8 @@ import heapq
 import sys
 import argparse
 from abc import ABC, abstractmethod
+import csv
+import os
 
 # ==========================
 # CLASSES DE PLAYER
@@ -11,7 +13,7 @@ from abc import ABC, abstractmethod
 
 # Custo para passar por terreno irregular (rough terrain)
 ROUGH_TERRAIN_COST = 2
-RECHARGE_VALUE = 60  # Valor de recarga da bateria
+
 
 class BasePlayer(ABC):
   """
@@ -41,60 +43,73 @@ class DefaultPlayer(BasePlayer):
   """
 
   def escolher_alvo(self, world):
-    recharge_pos = world.recharger
-    current_battery = self.battery
-    current_pos = self.position
-    centro = recharge_pos  # Usa a posição do recarregador como centro
+    sx, sy = self.position
+    # Se não estiver carregando pacote e houver pacotes disponíveis:
 
-    # Prioridade máxima para recarregar se bateria crítica
-    if current_battery < 14:
-      path, cost = world.astar(current_pos, recharge_pos)
-      return (recharge_pos, path, cost)
+    if len(world.goals) == 0:
+      return world.recharger
 
-    if self.cargo > 0:
-      # Lista de metas viáveis com distância do centro
-      viable_goals = []
-      for goal in world.goals:
-        path_to_goal, cost_to_goal = world.astar(current_pos, goal)
-        path_to_recharge, cost_to_recharge = world.astar(goal, recharge_pos)
-        total_cost = cost_to_goal + cost_to_recharge
+    if world.packages:
+      best = None
+      best_dist = float('inf')
 
-        if total_cost <= current_battery:
-          distancia = world.distancia_do_centro(goal, centro)
-          viable_goals.append((distancia, goal, path_to_goal, cost_to_goal))
+      if len(world.packages) == 1 and len(world.goals) == 1:
+        d_package = abs(world.packages[0][0] - sx) + \
+            abs(world.packages[0][1] - sy)
+        d_goal = abs(world.goals[0][0] - world.packages[0][0]) + \
+            abs(world.goals[0][1] - world.packages[0][1])
 
-      if viable_goals:
-        # Ordena por maior distância do centro primeiro
-        viable_goals.sort(reverse=True, key=lambda x: x[0])
-        return (viable_goals[0][1], viable_goals[0][2], viable_goals[0][3])
+        if (d_package + d_goal + 5) > self.battery:
+          if ((abs(world.recharger[0] - sx) + abs(world.recharger[1] - sy)) != 0) and abs(world.recharger[0] - sx) + abs(world.recharger[1] - sy) < self.battery:
+            return world.recharger
+          
+          return None
+        return world.packages[0]
       else:
-        path, cost = world.astar(current_pos, recharge_pos)
-        return (recharge_pos, path, cost)
-    else:
-      # Lista de pacotes viáveis com distância do centro
-      viable_packages = []
-      for pkg in world.packages:
-        path_to_pkg, cost_to_pkg = world.astar(current_pos, pkg)
+        for pkg in world.packages:
+          d = abs(pkg[0] - sx) + abs(pkg[1] - sy)
+          if d < best_dist:
+            best_dist = d
+            best = pkg
 
-        # Encontra a melhor entrega para este pacote
-        min_total_cost = float('inf')
+        if world.goals and self.cargo > 0:
+          for goal in world.goals:
+            d = abs(goal[0] - sx) + abs(goal[1] - sy)
+            if d < best_dist:
+              best_dist = d
+              best = goal
+
+        d_self_goal = abs(best[0] - sx) + abs(best[1] - sy)
+        d_self_recharge = abs(
+            world.recharger[0] - sx) + abs(world.recharger[1] - sy)
+        d_goal_recharge = abs(
+            best[0] - world.recharger[0]) + abs(best[1] - world.recharger[1])
+
+        if (d_self_goal + d_goal_recharge + 5) > self.battery:
+          return world.recharger
+        return best
+    elif self.cargo > 0:
+      # Se estiver carregando ou não houver mais pacotes, vai para a meta de entrega (se existir)
+      if world.goals:
+        best = None
+        best_dist = float('inf')
         for goal in world.goals:
-          path_pkg_to_goal, cost_pkg_to_goal = world.astar(pkg, goal)
-          path_to_recharge, cost_to_recharge = world.astar(goal, recharge_pos)
-          total = cost_to_pkg + cost_pkg_to_goal + cost_to_recharge
-          min_total_cost = min(min_total_cost, total)
+          d = abs(goal[0] - sx) + abs(goal[1] - sy)
+          if d < best_dist:
+            best_dist = d
+            best = goal
 
-        if min_total_cost <= current_battery:
-          distancia = world.distancia_do_centro(pkg, centro)
-          viable_packages.append((distancia, pkg, path_to_pkg, cost_to_pkg))
+        d_self_goal = abs(best[0] - sx) + abs(best[1] - sy)
+        d_self_recharge = abs(
+            world.recharger[0] - sx) + abs(world.recharger[1] - sy)
+        d_goal_recharge = abs(
+            best[0] - world.recharger[0]) + abs(best[1] - world.recharger[1])
 
-      if viable_packages:
-        # Ordena por maior distância do centro primeiro
-        viable_packages.sort(reverse=True, key=lambda x: x[0])
-        return (viable_packages[0][1], viable_packages[0][2], viable_packages[0][3])
+        if (d_self_goal + d_goal_recharge) > self.battery:
+          return world.recharger
+        return best
       else:
-        path, cost = world.astar(current_pos, recharge_pos)
-        return (recharge_pos, path, cost)
+        return None
 
 # ==========================
 # CLASSE WORLD (MUNDO)
@@ -102,7 +117,8 @@ class DefaultPlayer(BasePlayer):
 
 
 class World:
-  def __init__(self, seed=None):
+  def __init__(self, seed=None, headless=False):
+    self.headless = headless
     if seed is not None:
       random.seed(seed)
 
@@ -111,7 +127,6 @@ class World:
       seed = random.randint(0, 10000000000000000)
       random.seed(seed)
 
-    print("Seed: ", seed)
     # Parâmetros do grid e janela
     self.maze_size = 30
     self.width = 1000
@@ -126,7 +141,6 @@ class World:
                 for _ in range(self.maze_size)]
     # Geração de obstáculos com padrão de linha (assembly line)
     self.generate_obstacles()
-
     # Gera a lista de paredes a partir da matriz
     self.walls = []
     for row in range(self.maze_size):
@@ -136,7 +150,6 @@ class World:
 
     # Número total de itens (pacotes) a serem entregues
     self.total_items = random.randint(4, 10)
-    print("Itens a serem entregues: ", self.total_items)
 
     # Geração dos locais de coleta (pacotes)
     self.packages = []
@@ -163,28 +176,29 @@ class World:
 
     # Gera rough terrain após todas as outras entidades para evitar sobreposição
     self.rough_terrains = []
-    self.rough_color = (139, 69, 19)  # Cor para rough terrain
     self.generate_rough_terrain()  # Adicione esta linha após generate_obstacles()
 
-    # Inicializa a janela do Pygame
-    pygame.init()
-    self.screen = pygame.display.set_mode((self.width, self.height))
-    pygame.display.set_caption("Delivery Bot")
+    if not self.headless:
+      # Inicializa a janela do Pygame
+      pygame.init()
+      self.screen = pygame.display.set_mode((self.width, self.height))
+      pygame.display.set_caption("Delivery Bot")
 
-    # Carrega imagens para pacote, meta e recharger a partir de arquivos
-    self.package_image = pygame.image.load("images/cargo.png")
-    self.package_image = pygame.transform.scale(
-        self.package_image, (self.block_size, self.block_size))
+      # Carrega imagens para pacote, meta e recharger a partir de arquivos
+      self.package_image = pygame.image.load("images/cargo.png")
+      self.package_image = pygame.transform.scale(
+          self.package_image, (self.block_size, self.block_size))
 
-    self.goal_image = pygame.image.load("images/operator.png")
-    self.goal_image = pygame.transform.scale(
-        self.goal_image, (self.block_size, self.block_size))
+      self.goal_image = pygame.image.load("images/operator.png")
+      self.goal_image = pygame.transform.scale(
+          self.goal_image, (self.block_size, self.block_size))
 
-    self.recharger_image = pygame.image.load("images/charging-station.png")
-    self.recharger_image = pygame.transform.scale(
-        self.recharger_image, (self.block_size, self.block_size))
+      self.recharger_image = pygame.image.load("images/charging-station.png")
+      self.recharger_image = pygame.transform.scale(
+          self.recharger_image, (self.block_size, self.block_size))
 
     # Cores utilizadas para desenho (caso a imagem não seja usada)
+    self.rough_color = (139, 69, 19)  # Cor para rough terrain
     self.wall_color = (100, 100, 100)
     self.ground_color = (255, 255, 255)
     self.player_color = (0, 255, 0)
@@ -208,10 +222,6 @@ class World:
         self.map[y][x] = 2
         self.rough_terrains.append((x, y))
       attempts += 1
-
-    if len(self.rough_terrains) < max_roughs:
-      print(
-          f"Aviso: Apenas {len(self.rough_terrains)} rough terrains gerados.")
 
   def generate_obstacles(self):
     """
@@ -315,19 +325,31 @@ class World:
     pygame.draw.rect(self.screen, self.player_color, rect)
     pygame.display.flip()
 
+# ==========================
+# CLASSE MAZE: Lógica do jogo e planejamento de caminhos (A*)
+# ==========================
+
+
+class Maze:
+  def __init__(self, seed=None, headless=False, output_file="results.csv"):
+    self.headless = headless
+    self.world = World(seed, headless)
+    self.running = True
+    self.score = 0
+    self.steps = 0
+    self.delay = 100  # milissegundos entre movimentos
+    self.path = []
+    self.num_deliveries = 0  # contagem de entregas realizadas
+    self.output_file = output_file
+    self.seed = seed
+
   def heuristic(self, a, b):
-    base_cost = abs(a[0] - b[0]) + abs(a[1] - b[1])
-
-    # Penaliza movimento em direção ao centro
-    centro = self.recharger
-    distancia_ao_centro = abs(a[0] - centro[0]) + abs(a[1] - centro[1])
-
-    # Aumenta prioridade para células mais distantes do centro
-    return base_cost - (distancia_ao_centro // 2)  # Divisão para balancear
+    # Distância de Manhattan
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
   def astar(self, start, goal):
-    maze = self.map
-    size = self.maze_size
+    maze = self.world.map
+    size = self.world.maze_size
     neighbors = [(1, 0), (-1, 0), (0, 1), (0, -1)]
     close_set = set()
     came_from = {}
@@ -335,151 +357,117 @@ class World:
     fscore = {tuple(start): self.heuristic(start, goal)}
     oheap = []
     heapq.heappush(oheap, (fscore[tuple(start)], tuple(start)))
-
     while oheap:
       current = heapq.heappop(oheap)[1]
-
       if list(current) == goal:
         data = []
-        total_cost = gscore[current]
         while current in came_from:
           data.append(list(current))
           current = came_from[current]
         data.reverse()
-        return data, total_cost
-
+        return data
       close_set.add(current)
-
       for dx, dy in neighbors:
         neighbor = (current[0] + dx, current[1] + dy)
-
+        tentative_g = gscore[current] + 1
         if 0 <= neighbor[0] < size and 0 <= neighbor[1] < size:
+          # Parede, caminho bloqueado
           if maze[neighbor[1]][neighbor[0]] == 1:
             continue
 
+          # Calcula custo do terreno (ROUGH_TERRAIN_COST para rough terrain, 1 para normal)
           terrain_cost = ROUGH_TERRAIN_COST if maze[neighbor[1]
                                                     ][neighbor[0]] == 2 else 1
         else:
-          continue
+          continue  # Fora dos limites do grid
 
         tentative_g = gscore[current] + terrain_cost
-
         if neighbor in close_set and tentative_g >= gscore.get(neighbor, 0):
           continue
 
+        # Melhor caminho até então
         if tentative_g < gscore.get(neighbor, float('inf')) or neighbor not in [i[1] for i in oheap]:
           came_from[neighbor] = current
           gscore[neighbor] = tentative_g
           fscore[neighbor] = tentative_g + self.heuristic(neighbor, goal)
           heapq.heappush(oheap, (fscore[neighbor], neighbor))
-
-    return [], float('inf')
-
-  def distancia_do_centro(self, pos, centro):
-    """Calcula distância Manhattan de uma posição para o centro"""
-    return abs(pos[0] - centro[0]) + abs(pos[1] - centro[1])
-
-# ==========================
-# CLASSE MAZE: Lógica do jogo e planejamento de caminhos (A*)
-# ==========================
-
-
-class Maze:
-  def __init__(self, seed=None):
-    self.world = World(seed)
-    self.running = True
-    self.score = 0
-    self.steps = 0
-    self.delay = 100
-    self.path = []
-    self.num_deliveries = 0
+    return []
 
   def game_loop(self):
-    centro = self.world.recharger
-    max_distance = 0  # Rastreia a distância máxima do centro
-
+    # O jogo termina quando o número de entregas realizadas é igual ao total de itens.
     while self.running:
-      if self.num_deliveries >= self.world.total_items:
+      if self.num_deliveries >= self.world.total_items and ((abs(self.world.recharger[0] - self.world.player.position[0]) + abs(self.world.recharger[1] - self.world.player.position[1])) == 0):
         self.running = False
         break
 
-      target, path, cost = self.world.player.escolher_alvo(self.world)
-
-      if not path:
-        print("Nenhum caminho encontrado para o alvo", target)
+      # Utiliza a estratégia do jogador para escolher o alvo
+      target = self.world.player.escolher_alvo(self.world)
+      if target is None:
         self.running = False
         break
 
-      self.path = path
-      path_interrupted = False
+      self.path = self.astar(self.world.player.position, target)
+      if not self.path:
+        self.running = False
+        break
 
+      # Segue o caminho calculado
       for pos in self.path:
         self.world.player.position = pos
         self.steps += 1
 
-        # Atualiza distância máxima do centro
-        current_distance = self.world.distancia_do_centro(pos, centro)
-        if current_distance > max_distance:
-          max_distance = current_distance
-
-        # Coleta dinâmica de pacotes
-        if pos in self.world.packages:
-          self.world.player.cargo += 1
-          self.world.packages.remove(pos)
-          print(
-              f"📦 Pacote coletado! Carga: {self.world.player.cargo} | Distância do centro: {current_distance}")
-          path_interrupted = True
-
-        # Entrega dinâmica
-        if pos in self.world.goals and self.world.player.cargo > 0:
-          self.world.player.cargo -= 1
-          self.num_deliveries += 1
-          self.world.goals.remove(pos)
-          self.score += 50
-          print(
-              f"🎯 Entrega realizada! Total: {self.num_deliveries}/{self.world.total_items} | Distância: {current_distance}")
-          path_interrupted = True
-
-        # Atualiza bateria com custo do terreno
+        # Determina o custo do terreno
         x, y = pos
         cell_value = self.world.map[y][x]
-        terrain_cost = ROUGH_TERRAIN_COST if cell_value == 2 else 1
+        if cell_value == 2:
+          terrain_cost = ROUGH_TERRAIN_COST  # ROUGH_TERRAIN_COST para rough terrain
+        elif cell_value == 0:
+          terrain_cost = 1
+
+        # Atualiza bateria e pontuação
         self.world.player.battery -= terrain_cost
-        self.score -= terrain_cost
-
-        # Recarga automática
-        if pos == self.world.recharger:
+        if self.world.player.battery >= 0:
+          self.score -= terrain_cost  # Penalidade proporcional ao terreno
+        else:
+          self.running = False
+          self.score -= (self.world.total_items - self.num_deliveries) * 25
+          break
+        # Recarrega a bateria se estiver no recharger
+        if self.world.recharger and pos == self.world.recharger:
           self.world.player.battery = 60
-          print("🔋 Bateria recarregada!")
+        if not self.headless:
+          self.world.draw_world(self.path)
+          pygame.time.wait(self.delay)
 
-        # Renderização
-        self.world.draw_world(self.path)
-        pygame.time.wait(self.delay)
-
-        if path_interrupted:
-          break  # Recalcula rota com novos objetivos
-
-      # Status atualizado
-      print(f"""
-        ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-        ░ BATERIA: {self.world.player.battery:>3}% 
-        ░ PONTUAÇÃO: {self.score:>4}
-        ░ ENTREGAS: {self.num_deliveries}/{self.world.total_items}
-        ░ DISTÂNCIA MÁXIMA: {max_distance} blocos
-        ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-        """)
-
-    # Tela final
-    print(f"""
-    ╔═══════════════════════════╗
-    ║        FIM DE JOGO        ║
-    ╠═══════════════════════════╣
-    ║ Pontuação Final: {self.score:>6} ║
-    ║ Entregas Realizadas: {self.num_deliveries:>2}/{self.world.total_items} ║
-    ║ Distância Máxima: {max_distance:>4} bl ║
-    ╚═══════════════════════════╝
-    """)
+      # Ao chegar ao alvo, processa a coleta ou entrega:
+      if self.world.player.position == target:
+        # Se for local de coleta, pega o pacote.
+        if target in self.world.packages:
+          self.world.player.cargo += 1
+          self.world.packages.remove(target)
+        # Se for local de entrega e o jogador tiver pelo menos um pacote, entrega.
+        elif target in self.world.goals and self.world.player.cargo > 0:
+          self.world.player.cargo -= 1
+          self.num_deliveries += 1
+          self.world.goals.remove(target)
+          self.score += 50
+    # Gravação dos resultados
+    self._save_results()
     pygame.quit()
+
+  def _save_results(self):
+    file_exists = os.path.isfile(self.output_file)
+    with open(self.output_file, 'a', newline='') as f:
+      writer = csv.writer(f)
+      if not file_exists:
+        writer.writerow(['Seed', 'Score', 'Steps', 'Deliveries', 'Script'])
+      writer.writerow([
+          self.seed,
+          self.score,
+          self.steps,
+          self.num_deliveries,
+          os.path.basename(__file__)
+      ])
 
 
 # ==========================
@@ -495,7 +483,13 @@ if __name__ == "__main__":
       default=None,
       help="Valor do seed para recriar o mesmo mundo (opcional)."
   )
+  parser.add_argument(
+      "--headless",
+      action="store_true",
+      help="Executa em modo sem interface gráfica para coleta de dados"
+  )
+  parser.add_argument("--output", type=str, default="results.csv")
   args = parser.parse_args()
 
-  maze = Maze(seed=args.seed)
+  maze = Maze(seed=args.seed, headless=args.headless, output_file=args.output)
   maze.game_loop()

@@ -81,7 +81,6 @@ class World:
       seed = random.randint(0, 10000000000000000)
       random.seed(seed)
 
-    print("Seed: ", seed)
     # Parâmetros do grid e janela
     self.maze_size = 30
     self.width = 1000
@@ -105,7 +104,6 @@ class World:
 
     # Número total de itens (pacotes) a serem entregues
     self.total_items = random.randint(4, 10)
-    print("Itens a serem entregues: ", self.total_items)
 
     # Geração dos locais de coleta (pacotes)
     self.packages = []
@@ -324,7 +322,6 @@ class Maze:
 
       self.path = self.astar(self.world.player.position, target)
       if not self.path:
-        print("Nenhum caminho encontrado para o alvo", target)
         self.running = False
         break
 
@@ -341,7 +338,6 @@ class Maze:
         # Recarrega a bateria se estiver no recharger
         if self.world.recharger and pos == self.world.recharger:
           self.world.player.battery = 60
-          print("Bateria recarregada!")
         if not self.headless:
           self.world.draw_world(self.path)
           pygame.time.wait(self.delay)
@@ -352,21 +348,12 @@ class Maze:
         if target in self.world.packages:
           self.world.player.cargo += 1
           self.world.packages.remove(target)
-          print("Pacote coletado em", target,
-                "Cargo agora:", self.world.player.cargo)
         # Se for local de entrega e o jogador tiver pelo menos um pacote, entrega.
         elif target in self.world.goals and self.world.player.cargo > 0:
           self.world.player.cargo -= 1
           self.num_deliveries += 1
           self.world.goals.remove(target)
           self.score += 50
-          print("Pacote entregue em", target,
-                "Cargo agora:", self.world.player.cargo)
-      print(f"Passos: {self.steps}, Pontuação: {self.score}, Cargo: {self.world.player.cargo}, Bateria: {self.world.player.battery}, Entregas: {self.num_deliveries}")
-
-    print("Fim de jogo!")
-    print("Pontuação final:", self.score)
-    print("Total de passos:", self.steps)
     # Gravação dos resultados
     self._save_results()
     pygame.quit()
