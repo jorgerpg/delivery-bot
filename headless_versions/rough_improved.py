@@ -12,7 +12,7 @@ import os
 # ==========================
 
 # Custo para passar por terreno irregular (rough terrain)
-ROUGH_TERRAIN_COST = 10
+ROUGH_TERRAIN_COST = 2
 RECHARGE_VALUE = 60  # Valor de recarga da bateria
 
 
@@ -52,7 +52,8 @@ class DefaultPlayer(BasePlayer):
     # if current_battery < 10:
     #   path, cost = world.astar(current_pos, recharge_pos)
     #   return (recharge_pos, path, cost)
-
+    if len(world.goals) == 0:
+      return world.recharger
     # 2. Se tem carga, verifica pacotes no caminho das metas
     if self.cargo > 0:
       # Loop sobre metas para verificar pacotes intermediários
@@ -139,7 +140,6 @@ class World:
       seed = random.randint(0, 10000000000000000)
       random.seed(seed)
 
-    print("Seed: ", seed)
     # Parâmetros do grid e janela
     self.maze_size = 30
     self.width = 1000
@@ -163,7 +163,6 @@ class World:
 
     # Número total de itens (pacotes) a serem entregues
     self.total_items = random.randint(4, 10)
-    print("Itens a serem entregues: ", self.total_items)
 
     # Geração dos locais de coleta (pacotes)
     self.packages = []
@@ -236,10 +235,6 @@ class World:
         self.map[y][x] = 2
         self.rough_terrains.append((x, y))
       attempts += 1
-
-    if len(self.rough_terrains) < max_roughs:
-      print(
-          f"Aviso: Apenas {len(self.rough_terrains)} rough terrains gerados.")
 
   def generate_obstacles(self):
     """
@@ -423,8 +418,6 @@ class Maze:
       target, path, cost = self.world.player.escolher_alvo(self.world)
 
       if not path:
-        print(
-            f"Nenhum caminho encontrado para o alvo {target} custo: {cost}, path: {path}")
         self.running = False
         break
 
@@ -442,7 +435,6 @@ class Maze:
         if current_pos in self.world.packages:
           self.world.player.cargo += 1
           self.world.packages.remove(current_pos)
-          print(f"Pacote coletado! Carga atual: {self.world.player.cargo}")
           path_interrupted = True
 
         # Entrega dinâmica
@@ -450,8 +442,6 @@ class Maze:
           self.world.player.cargo -= 1
           self.num_deliveries += 1
           self.world.goals.remove(current_pos)
-          print(
-              f"Entrega realizada! Total: {self.num_deliveries}/{self.world.total_items}")
           self.score += 50
           path_interrupted = True
 
@@ -473,7 +463,6 @@ class Maze:
         # Verifica recarga
         if self.world.recharger and pos == self.world.recharger:
           self.world.player.battery = RECHARGE_VALUE
-          print("Bateria recarregada!")
 
         if not self.headless:
           self.world.draw_world(self.path)
@@ -481,11 +470,7 @@ class Maze:
 
         if path_interrupted:
           break  # Recalcula novo caminho
-      print(f"Passos: {self.steps}, Pontuação: {self.score}, Cargo: {self.world.player.cargo}, Bateria: {self.world.player.battery}, Entregas: {self.num_deliveries}")
-
-    print("Fim de jogo!")
-    print("Pontuação final:", self.score)
-    print("Total de passos:", self.steps)
+        
     # Gravação dos resultados
     self._save_results()
     pygame.quit()

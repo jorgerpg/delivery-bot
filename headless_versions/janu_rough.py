@@ -12,7 +12,7 @@ import os
 # ==========================
 
 # Custo para passar por terreno irregular (rough terrain)
-ROUGH_TERRAIN_COST = 10
+ROUGH_TERRAIN_COST = 2
 
 
 class BasePlayer(ABC):
@@ -63,8 +63,6 @@ class DefaultPlayer(BasePlayer):
           if ((abs(world.recharger[0] - sx) + abs(world.recharger[1] - sy)) != 0) and abs(world.recharger[0] - sx) + abs(world.recharger[1] - sy) < self.battery:
             return world.recharger
 
-          print("Battery: ", self.battery,
-                "Distance to compleate: ", (d_package + d_goal + 5))
           return None
         return world.packages[0]
       else:
@@ -129,7 +127,6 @@ class World:
       seed = random.randint(0, 10000000000000000)
       random.seed(seed)
 
-    print("Seed: ", seed)
     # Parâmetros do grid e janela
     self.maze_size = 30
     self.width = 1000
@@ -153,7 +150,6 @@ class World:
 
     # Número total de itens (pacotes) a serem entregues
     self.total_items = random.randint(4, 10)
-    print("Itens a serem entregues: ", self.total_items)
 
     # Geração dos locais de coleta (pacotes)
     self.packages = []
@@ -226,10 +222,6 @@ class World:
         self.map[y][x] = 2
         self.rough_terrains.append((x, y))
       attempts += 1
-
-    if len(self.rough_terrains) < max_roughs:
-      print(
-          f"Aviso: Apenas {len(self.rough_terrains)} rough terrains gerados.")
 
   def generate_obstacles(self):
     """
@@ -405,21 +397,17 @@ class Maze:
     # O jogo termina quando o número de entregas realizadas é igual ao total de itens.
     while self.running:
       if self.num_deliveries >= self.world.total_items and ((abs(self.world.recharger[0] - self.world.player.position[0]) + abs(self.world.recharger[1] - self.world.player.position[1])) == 0):
-        print("Entrou aqui: ", ((abs(self.world.recharger[0] - self.world.player.position[0]) + abs(
-            self.world.recharger[1] - self.world.player.position[1]))))
         self.running = False
         break
 
       # Utiliza a estratégia do jogador para escolher o alvo
       target = self.world.player.escolher_alvo(self.world)
       if target is None:
-        print("No more target")
         self.running = False
         break
 
       self.path = self.astar(self.world.player.position, target)
       if not self.path:
-        print("Nenhum caminho encontrado para o alvo", target)
         self.running = False
         break
 
@@ -433,8 +421,6 @@ class Maze:
         cell_value = self.world.map[y][x]
         if cell_value == 2:
           terrain_cost = ROUGH_TERRAIN_COST  # ROUGH_TERRAIN_COST para rough terrain
-          print(
-              f"Passando por rough terrain em {pos}! Bateria -{ROUGH_TERRAIN_COST}")
         elif cell_value == 0:
           terrain_cost = 1
 
@@ -444,18 +430,13 @@ class Maze:
           self.score -= terrain_cost  # Penalidade proporcional ao terreno
         else:
           self.running = False
-          print("Bateria descarregada! Entregas faltantes: ",
-                (self.world.total_items - self.num_deliveries))
 
           self.score -= (self.world.total_items - self.num_deliveries) * 25
           self.score -= 25
           break
         # Recarrega a bateria se estiver no recharger
         if self.world.recharger and pos == self.world.recharger:
-          print("Chegou na estação de recarga com bateira em: ",
-                self.world.player.battery)
           self.world.player.battery = 60
-          print("Bateria recarregada!")
         if not self.headless:
           self.world.draw_world(self.path)
           pygame.time.wait(self.delay)
@@ -466,21 +447,12 @@ class Maze:
         if target in self.world.packages:
           self.world.player.cargo += 1
           self.world.packages.remove(target)
-          print("Pacote coletado em", target,
-                "Cargo agora:", self.world.player.cargo)
         # Se for local de entrega e o jogador tiver pelo menos um pacote, entrega.
         elif target in self.world.goals and self.world.player.cargo > 0:
           self.world.player.cargo -= 1
           self.num_deliveries += 1
           self.world.goals.remove(target)
           self.score += 50
-          print("Pacote entregue em", target,
-                "Cargo agora:", self.world.player.cargo)
-      print(f"Passos: {self.steps}, Pontuação: {self.score}, Cargo: {self.world.player.cargo}, Bateria: {self.world.player.battery}, Entregas: {self.num_deliveries}")
-
-    print("Fim de jogo!")
-    print("Pontuação final:", self.score)
-    print("Total de passos:", self.steps)
     # Gravação dos resultados
     self._save_results()
     pygame.quit()

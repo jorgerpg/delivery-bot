@@ -8,7 +8,7 @@ import random
 
 def run_script(script, seed, output_csv):
   subprocess.run([
-      "python", script,
+      "python3", script,
       "--seed", str(seed),
       "--headless",
       "--output", output_csv
@@ -20,13 +20,14 @@ def run_comparison(scripts, num_runs, output_csv, custom_seeds=None):
     seeds = custom_seeds
     print(f"Using custom seeds: {seeds}")
   else:
-    seeds = [random.randint(0, 10**16) for _ in range(num_runs)]
+    seeds = [random.randint(0, 10**10) for _ in range(num_runs)]
     print(f"Generated random seeds: {seeds}")
 
   with ProcessPoolExecutor() as executor:
     futures = []
     for seed in seeds:
       for script in scripts:
+        print(f"Running {script} with seed {seed}")
         futures.append(executor.submit(run_script, script, seed, output_csv))
 
     # Wait for all executions
