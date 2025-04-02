@@ -13,8 +13,8 @@ Este projeto contém diversas versões do código original, cada uma com diferen
 ### 3. `rough_terrain.py`
 **Descrição:** Versão original com a adição do conceito de `rough_terrain`, Heurística igual à do original.
 
-### 4. `rough_improved.py`
-**Descrição:** Implementação de uma nova lógica de escolha baseada no `rough_terrain`, e heuristica diferente da janu para levar em consideração o peso do terreno. Não volta para o carregador no fim. 
+### 4. `rough_integrated.py`
+**Descrição:** Implementação de uma nova lógica de escolha baseada no `rough_terrain`, logica de decisão igual a do janu mas utilizando o astar para calcular a distancia e o path.
 
 ### 5. `main_janu_rough.py`
 **Descrição:** Implementação de uma nova lógica de escolha baseada no `rough_terrain`, e heuristica do janu com a adição do calculo do rough_terrain no astar. Volta para o carregador no fim. validar qual o melhor processo.
@@ -33,14 +33,10 @@ Este projeto contém diversas versões do código original, cada uma com diferen
   Para comparar diferentes versões do código, você pode utilizar o seguinte comando:
 
   #### Usando seeds aleatórios (padrão)
-  python compare_scripts.py algo1.py algo2.py --runs 5 --output results_seeded.csv
+  python3 .\compare_script.py .\with_rough\janu_rough.py .\with_rough\rough_integrated.py .\with_rough\rough_terrain.py --runs 100
+
+  python3 .\compare_script.py .\without_rough\janu.py .\without_rough\integrated.py .\without_rough\original.py --runs 100 
 
   #### Usando seeds específicos
-  python compare_scripts.py algo1.py algo2.py --seeds 8192736887241304,3770486853704386 --output results_seeded.csv
+  python3 .\compare_script.py .\with_rough\janu_rough.py .\with_rough\rough_integrated.py .\with_rough\rough_terrain.py --seeds 8192736887241304,3770486853704386 --output results_seeded.csv
 
-
-
-## Status Atual
-Atualmente, o desenvolvimento está focado em:
-- Validar o comportamento do código com as seeds de teste fornecidas no arquivo `test_seeds.py`.
-- Melhorar a documentação para refletir as mudanças mais recentes no repositório.
