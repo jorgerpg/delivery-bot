@@ -1,37 +1,24 @@
-# README - Descrição dos Arquivos do Projeto
+# README - Sistema de Entrega Autônoma com Pathfinding
 
-Equipe: Daniel Januario, Jorge Ricarte e Ruan Utah.
+**Equipe:** Daniel Januário, Jorge Ricarte e Ruan Utah
 
-Este projeto contém diversas versões do código original, cada uma com diferentes modificações e melhorias implementadas ao longo do tempo. Abaixo, detalhamos o propósito e as mudanças realizadas em cada arquivo:
+---
 
-## Arquivos e suas funcionalidades:
+## Visão Geral
+Este projeto simula um robô autônomo de entrega em um ambiente grid-based, com múltiplas versões de algoritmos de pathfinding e estratégias de decisão. Inclui comparações entre diferentes abordagens de otimização de rotas, gestão de bateria e tratamento de terrenos irregulares.
 
-### 1. `original.py`
-**Descrição:** Versão original do código base enviado pelo professor, sem alterações. Este arquivo serve como referência inicial para as modificações posteriores.
+---
 
-### 2. `janu.py`
-**Descrição:** Versão modificada por Januário, contendo suas adições e melhorias específicas. Entre as mudanças, destacam-se:
-- Capacidade de pegar mais de uma carga.
-- Nunca permitir a bateria descarregar completamente.
-- Sempre retornar ao carregador ao final da execução.
+## Dependências:
 
-### 3. `rough_terrain.py`
-**Descrição:** Versão original com a adição do conceito de `rough_terrain`. Mantém a heurística da versão original.
+- Python 3, pip
+- Bibliotecas: pygame, numpy, pandas, matplotlib, seaborn
 
-### 4. `janu_rough.py`
-**Descrição:** Implementa uma nova lógica de escolha baseada no `rough_terrain`, combinando a heurística de Janu com o cálculo de `rough_terrain` no algoritmo A*.
-- Retorna ao carregador ao final da execução.
-- Valida qual é o melhor processo para otimização do caminho.
+Instale todas as bibliotecas com:
 
-### 5. `rough_integrated.py`
-**Descrição:** Implementa uma nova lógica de escolha baseada no `rough_terrain`.
-- Utiliza a lógica de decisão de Janu, mas emprega o algoritmo A* para calcular a distância e o caminho ideal.
-
-### 6. `headless_versions`
-**Descrição:** Versões otimizadas para rodar o script comparativo de forma mais rápida, sem a necessidade de interface gráfica. Os gráficos comparativos gerados incluem:
-  - **Score:** Pontuação obtida em cada execução.
-  - **Steps:** Número de passos realizados.
-  - **Ratio Step/Score:** Relação entre o número de passos e a pontuação.
+```bash
+pip install -r requirements.txt
+```
 
 ## Exemplo de Execução
 
@@ -43,19 +30,46 @@ O script `compare_script.py` deve ser executado dentro da pasta `headless_versio
 ### Usando seeds aleatórias (padrão)
 ```bash
 cd headless_versions
+
+# Comparação geral dos codigos com terreno irregular (100 execuções com seeds aleatórias)
 python3 compare_script.py with_rough/janu_rough.py with_rough/rough_integrated.py with_rough/rough_terrain.py --runs 100
 
-python3 compare_script.py without_rough/janu.py without_rough/integrated.py without_rough/original.py --runs 100
+# Comparação com seeds específicas sem terreno irregular
+python3 compare_script.py without_rough/janu.py without_rough/integrated.py without_rough/original.py --seeds 8192736887241304,3770486853704386 --output results_seeded.csv
 ```
 
-### Usando seeds específicas
+### Execução com Interface Gráfica
+Da pasta raiz do projeto
 ```bash
-cd headless_versions
-python3 compare_script.py with_rough/janu_rough.py with_rough/rough_integrated.py with_rough/rough_terrain.py --seeds 8192736887241304,3770486853704386 --output results_seeded.csv
+python3 normal_versions/rough_integrated.py
 ```
 
-### Rodando versões com gráficos
-As versões que geram gráficos estão na pasta `normal_versions` e devem ser executadas a partir da pasta raiz do projeto. Exemplo:
-```bash
-python3 normal_versions/integrated.py
-```
+---
+
+## Estrutura do Projeto
+
+### Diretórios Principais
+| Diretório           | Descrição                                                                 |
+|---------------------|---------------------------------------------------------------------------|
+| `normal_versions/`  | Versões com interface gráfica (PyGame)                                   |
+| `headless_versions/`| Versões otimizadas para execução em batch sem GUI                        |
+| `with_rough/`       | Versões que incluem lógica para terreno irregular                        |
+| `without_rough/`    | Versões base sem tratamento de terreno irregular                         |
+
+---
+
+## Principais Arquivos
+
+### Versões Base
+| Arquivo               | Descrição                                                                 |
+|-----------------------|---------------------------------------------------------------------------|
+| `original.py`         | Implementação original do professor sem modificações                     |
+| `rough_terrain.py`    | Versão base + suporte a terreno irregular (custo 2 por movimento)        |
+
+### Versões Aprimoradas
+| Arquivo               | Destaques                                                                 |
+|-----------------------|---------------------------------------------------------------------------|
+| `rough_integrated.py` | - Algoritmo A* com custo variável<br>- Lógica de decisão de Janu<br>- Otimização para terrenos irregulares |
+| `janu_rough.py`       | - Pathfinding A* com custos dinâmicos<br>- Validação de rotas seguras (+5 energia de margem)<br>- Retorno obrigatório ao carregador |
+
+---
