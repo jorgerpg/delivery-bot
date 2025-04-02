@@ -119,21 +119,28 @@ def run_comparison(scripts, num_runs, output_csv, custom_seeds=None):
 
 def plot_results(csv_file, results_dir):
   """
-  Gera um conjunto completo de visualizações para análise comparativa:
-  - Gráficos de distribuição (boxplot, violinplot)
-  - Gráficos de relação (scatter, regressão)
-  - Visualizações agregadas (heatmap, barras)
-  - Gráficos de eficiência (score/steps ratio)
+  Gera visualizações completas com tratamento de erros robusto e estilos atualizados
   """
   try:
-      # Leitura e preparação dos dados
+      # Configuração inicial com estilo moderno
+    plt.style.use('seaborn-v0_8')  # Estilo compatível com versões recentes
+    sns.set_theme(style="whitegrid")  # Configuração visual do Seaborn
+
+    # Leitura e preparação dos dados
     df = pd.read_csv(csv_file)
 
     if df.empty:
       print("No data found in CSV. Skipping plotting.")
       return
 
-    # Filtra apenas seeds completas (executadas em todos scripts)
+    # Verificação de colunas obrigatórias
+    required_columns = ['Script', 'Seed', 'Score', 'Steps']
+    if not all(col in df.columns for col in required_columns):
+      missing = [col for col in required_columns if col not in df.columns]
+      print(f"Missing required columns: {missing}. Skipping plotting.")
+      return
+
+    # Filtra apenas seeds completas
     script_counts = df.groupby('Seed')['Script'].nunique()
     num_scripts = df['Script'].nunique()
     complete_seeds = script_counts[script_counts == num_scripts].index.tolist()
@@ -144,151 +151,93 @@ def plot_results(csv_file, results_dir):
 
     print(f"Using {len(complete_seeds)} complete seeds for analysis")
     filtered_df = df[df['Seed'].isin(complete_seeds)].copy()
-    grouped = filtered_df.groupby(['Script', 'Seed']).mean().reset_index()
-    grouped['Score/Steps'] = grouped['Score'] / grouped['Steps']
 
-    # Configurações comuns
-    plt.style.use('seaborn')
-    plots_dir = os.path.join(results_dir, "advanced_plots")
+    # Cálculo de métricas adicionais
+    filtered_df['Score/Steps'] = filtered_df['Score'] / filtered_df['Steps']
+    grouped = filtered_df.groupby(['Script', 'Seed']).mean(
+        numeric_only=True).reset_index()
+
+    # Configurações de visualização
+    plots_dir = os.path.join(results_dir, "analysis_plots")
     os.makedirs(plots_dir, exist_ok=True)
-    colors = sns.color_palette("husl", num_scripts)
+    palette = sns.color_palette("husl", num_scripts)
 
     # =====================================================================
-    # 1. ANÁLISE DE DISTRIBUIÇÃO
+    # VISUALIZAÇÕES PRINCIPAIS (com tratamento de erro individual)
     # =====================================================================
 
-    # Boxplot comparativo
-    plt.figure(figsize=(12, 6))
-    sns.boxplot(data=grouped, x='Script', y='Score', palette=colors)
-    plt.title('Distribuição de Scores por Script\n(Quartis e Outliers)')
-    plt.xlabel('Script')
-    plt.ylabel('Score')
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.savefig(os.path.join(
-        plots_dir, "1_score_distribution_boxplot.png"), dpi=300)
-    plt.close()
+    def safe_plot(func, filename, **kwargs):
+      """Helper function to make each plot safely"""
+      try:
+        func(**kwargs)
+        plt.tight_layout()
+        plt.savefig(os.path.join(plots_dir, filename), dpi=150)
+        plt.close()
+        print(f"Generated {filename}")
+      except Exception as e:
+        print(f"Failed to generate {filename}: {str(e)}")
 
-    # Violin plot (distribuição de densidade)
-    plt.figure(figsize=(12, 6))
-    sns.violinplot(data=grouped, x='Script', y='Score', palette=colors,
-                   inner='quartile', cut=0)
-    plt.title('Densidade de Distribuição de Scores')
-    plt.savefig(os.path.join(
-        plots_dir, "2_score_density_violinplot.png"), dpi=300)
-    plt.close()
+    # 1. Boxplot de scores
+    safe_plot(
+        func=lambda: sns.boxplot(
+            data=filtered_df, x='Script', y='Score', palette=palette),
+        filename="1_score_distribution.png",
+    )
 
-    # =====================================================================
-    # 2. ANÁLISE DE EFICIÊNCIA (SCORE/STEPS)
-    # =====================================================================
+    # 2. Violin plot de eficiência
+    safe_plot(
+        func=lambda: sns.violinplot(
+            data=filtered_df, x='Script', y='Score/Steps', palette=palette),
+        filename="2_efficiency_distribution.png",
+    )
 
-    # Comparação de razão Score/Steps
-    plt.figure(figsize=(12, 6))
-    sns.barplot(data=grouped, x='Seed', y='Score/Steps', hue='Script',
-                palette=colors, dodge=True)
-    plt.title('Eficiência (Score/Steps) por Seed')
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.xticks(rotation=90)
-    plt.tight_layout()
-    plt.savefig(os.path.join(plots_dir, "3_efficiency_by_seed.png"), dpi=300)
-    plt.close()
+    # 3. Scatter plot com regressão
+    safe_plot(
+        func=lambda: sns.lmplot(
+            data=filtered_df,
+            x='Steps',
+            y='Score',
+            hue='Script',
+            palette=palette,
+            height=6,
+            aspect=1.3,
+            ci=None
+        ),
+        filename="3_steps_vs_score.png",
+    )
 
-    # Média de eficiência por script
-    plt.figure(figsize=(10, 6))
-    sns.pointplot(data=grouped, x='Script', y='Score/Steps',
-                  palette=colors, ci=95, join=False)
-    plt.title('Eficiência Média com Intervalo de Confiança (95%)')
-    plt.savefig(os.path.join(plots_dir, "4_mean_efficiency_ci.png"), dpi=300)
-    plt.close()
+    # 4. Heatmap de métricas
+    safe_plot(
+        func=lambda: (
+            metrics := filtered_df.groupby('Script')[['Score', 'Steps', 'Score/Steps']].mean(),
+            sns.heatmap(
+                metrics.T,
+                annot=True,
+                fmt=".1f",
+                cmap="Blues",
+                linewidths=.5
+            ),
+            plt.title("Métricas Comparativas")
+        ),
+        filename="4_metrics_comparison.png",
+    )
 
-    # =====================================================================
-    # 3. ANÁLISE DE RELAÇÕES ENTRE VARIÁVEIS
-    # =====================================================================
+    # 5. Gráfico de barras agrupadas
+    safe_plot(
+        func=lambda: sns.barplot(
+            data=grouped,
+            x='Seed',
+            y='Score',
+            hue='Script',
+            palette=palette
+        ),
+        filename="5_scores_by_seed.png",
+    )
 
-    # Scatter plot com regressão linear
-    g = sns.lmplot(data=grouped, x='Steps', y='Score', hue='Script',
-                   height=6, aspect=1.5, palette=colors, ci=None,
-                   scatter_kws={'s': 100, 'alpha': 0.7})
-    plt.title('Relação entre Steps e Score\n(com Linhas de Regressão)')
-    g.savefig(os.path.join(plots_dir, "5_steps_vs_score_regression.png"), dpi=300)
-    plt.close()
-
-    # Pairplot multivariado
-    if num_scripts <= 5:  # Evita gráficos muito complexos
-      sns.pairplot(grouped, vars=['Score', 'Steps', 'Score/Steps'],
-                   hue='Script', palette=colors, height=3)
-      plt.suptitle('Relações Multivariadas entre Métricas', y=1.02)
-      plt.savefig(os.path.join(
-          plots_dir, "6_multivariate_relationships.png"), dpi=300)
-      plt.close()
-
-    # =====================================================================
-    # 4. VISUALIZAÇÕES AGREGADAS
-    # =====================================================================
-
-    # Heatmap de métricas normalizadas
-    metrics = grouped.groupby(
-        'Script')[['Score', 'Steps', 'Score/Steps']].mean()
-    metrics_norm = (metrics - metrics.min()) / (metrics.max() - metrics.min())
-
-    plt.figure(figsize=(10, 6))
-    sns.heatmap(metrics_norm.T, annot=True, fmt=".2f", cmap="YlGnBu",
-                linewidths=.5, cbar_kws={'label': 'Performance Normalizada'})
-    plt.title('Comparação Relativa de Métricas (0-1)')
-    plt.savefig(os.path.join(plots_dir, "7_metrics_heatmap.png"), dpi=300)
-    plt.close()
-
-    # Radar chart para comparação multivariada
-    if num_scripts <= 6:  # Radar charts ficam confusos com muitos scripts
-      from math import pi
-
-      categories = metrics_norm.columns.tolist()
-      N = len(categories)
-
-      angles = [n / float(N) * 2 * pi for n in range(N)]
-      angles += angles[:1]
-
-      plt.figure(figsize=(8, 8))
-      ax = plt.subplot(111, polar=True)
-      ax.set_theta_offset(pi / 2)
-      ax.set_theta_direction(-1)
-
-      for idx, (script, row) in enumerate(metrics_norm.iterrows()):
-        values = row.values.flatten().tolist()
-        values += values[:1]
-        ax.plot(angles, values, linewidth=2, linestyle='solid',
-                label=script, color=colors[idx])
-        ax.fill(angles, values, alpha=0.1, color=colors[idx])
-
-      plt.xticks(angles[:-1], categories)
-      ax.set_rlabel_position(0)
-      plt.yticks([0.2, 0.4, 0.6, 0.8], ["20%", "40%",
-                 "60%", "80%"], color="grey", size=7)
-      plt.ylim(0, 1)
-      plt.title('Perfil de Performance Relativa', pad=20)
-      plt.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1))
-      plt.savefig(os.path.join(plots_dir, "8_radar_chart.png"),
-                  dpi=300, bbox_inches='tight')
-      plt.close()
-
-    # =====================================================================
-    # 5. VISUALIZAÇÃO DE TENDÊNCIAS TEMPORAIS (se houver dados temporais)
-    # =====================================================================
-    if 'ExecutionTime' in grouped.columns:
-      plt.figure(figsize=(12, 6))
-      sns.lineplot(data=grouped, x='Seed', y='ExecutionTime', hue='Script',
-                   palette=colors, marker='o')
-      plt.title('Tempo de Execução por Seed')
-      plt.xticks(rotation=45)
-      plt.tight_layout()
-      plt.savefig(os.path.join(
-          plots_dir, "9_execution_time_trend.png"), dpi=300)
-      plt.close()
-
-    print(f"All advanced plots saved to: {plots_dir}")
+    print(f"All generated plots saved to: {plots_dir}")
 
   except Exception as e:
-    print(f"Error in advanced plotting: {str(e)}")
+    print(f"Critical error in plot generation: {str(e)}")
     import traceback
     traceback.print_exc()
 
