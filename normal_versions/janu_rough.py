@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 # ==========================
 
 # Custo para passar por terreno irregular (rough terrain)
-ROUGH_TERRAIN_COST = 2
+ROUGH_TERRAIN_COST = 3
 
 
 class BasePlayer(ABC):

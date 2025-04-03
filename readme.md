@@ -27,19 +27,33 @@ Para comparar diferentes versões do código, utilize os seguintes comandos:
 ### Rodando `compare_script`
 O script `compare_script.py` deve ser executado dentro da pasta `headless_versions`, garantindo que todas as dependências estejam corretamente configuradas.
 
-### Usando seeds aleatórias (padrão)
 ```bash
 cd headless_versions
 
-# Comparação geral dos codigos com terreno irregular (100 execuções com seeds aleatórias)
+# Comparação geral dos códigos com terreno irregular (100 execuções com seeds aleatórias)
 python3 compare_script.py with_rough/janu_rough.py with_rough/rough_integrated.py with_rough/rough_terrain.py --runs 100
 
 # Comparação com seeds específicas sem terreno irregular
 python3 compare_script.py without_rough/janu.py without_rough/integrated.py without_rough/original.py --seeds 8192736887241304,3770486853704386 --output results_seeded.csv
 ```
 
+---
+
+### Rodando `compare_script_diff`
+O script `compare_script_diff.py` deve ser executado dentro da pasta `headless_versions`. Ele roda os scripts de forma semelhante ao anterior, mas gera gráficos diferentes.
+
+```bash
+cd headless_versions
+
+# Comparação geral dos códigos com terreno irregular (100 execuções com seeds aleatórias)
+python3 compare_script_diff.py with_rough/janu_rough.py with_rough/rough_integrated.py with_rough/rough_terrain.py --runs 100
+
+# Comparação com seeds específicas sem terreno irregular
+python3 compare_script_diff.py without_rough/janu.py without_rough/integrated.py without_rough/original.py --seeds 8192736887241304,3770486853704386 --output results_seeded.csv
+```
+
 ### Execução com Interface Gráfica
-Da pasta raiz do projeto
+Da pasta raiz do projeto:
 ```bash
 python3 normal_versions/rough_integrated.py
 ```
@@ -54,7 +68,7 @@ python3 normal_versions/rough_integrated.py
 | `normal_versions/`  | Versões com interface gráfica (PyGame)                                   |
 | `headless_versions/`| Versões otimizadas para execução em batch sem GUI                        |
 | `with_rough/`       | Versões que incluem lógica para terreno irregular                        |
-| `without_rough/`    | Versões base sem tratamento de terreno irregular                         |
+| `without_rough/`    | Versões base sem terreno irregular                                       |
 
 ---
 
@@ -64,12 +78,10 @@ python3 normal_versions/rough_integrated.py
 | Arquivo               | Descrição                                                                 |
 |-----------------------|---------------------------------------------------------------------------|
 | `original.py`         | Implementação original do professor sem modificações                     |
-| `rough_terrain.py`    | Versão base + suporte a terreno irregular (custo 2 por movimento)        |
+| `rough_terrain.py`    | Versão base + suporte a terreno irregular (custo variável por movimento) |
 
 ### Versões Aprimoradas
 | Arquivo               | Destaques                                                                 |
 |-----------------------|---------------------------------------------------------------------------|
-| `rough_integrated.py` | - Algoritmo A* com custo variável<br>- Lógica de decisão de Janu<br>- Otimização para terrenos irregulares |
-| `janu_rough.py`       | - Pathfinding A* com custos dinâmicos<br>- Validação de rotas seguras (+5 energia de margem)<br>- Retorno obrigatório ao carregador |
-
----
+| `janu_rough.py`       | Iteração aprimorada de `rough_terrain.py`:<br>- Pathfinding A* com custos dinâmicos<br>- Validação de rotas seguras (+5 energia de margem) usando Manhattan<br>- Otimização para terrenos irregulares<br>- Retorno obrigatório ao carregador |
+| `rough_integrated.py` | Iteração aprimorada de `janu_rough.py`:<br>- Lógica de decisão de Janu utilizando o A* na decisão da distância ao inves do Manhattan<br>- Todas as vantagens do janu.<br>|

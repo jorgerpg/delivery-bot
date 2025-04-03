@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 # ==========================
 
 # Custo para passar por terreno irregular (rough terrain)
-ROUGH_TERRAIN_COST = 2
+ROUGH_TERRAIN_COST = 3
 RECHARGE_VALUE = 60  # Valor de recarga da bateria
 
 
@@ -46,7 +46,8 @@ class DefaultPlayer(BasePlayer):
     # Se não estiver carregando pacote e houver pacotes disponíveis:
 
     if len(world.goals) == 0:
-      recharger_path, recharger_dist = world.astar(current_pos, world.recharger)
+      recharger_path, recharger_dist = world.astar(
+          current_pos, world.recharger)
       return recharger_path, world.recharger
 
     if world.packages:
@@ -59,7 +60,8 @@ class DefaultPlayer(BasePlayer):
         goal_path, d_goal = world.astar(world.packages[0], world.goals[0])
 
         if (d_package + d_goal) > self.battery:
-          recharger_path, recharger_dist = world.astar(current_pos, world.recharger)
+          recharger_path, recharger_dist = world.astar(
+              current_pos, world.recharger)
           if recharger_dist and recharger_dist < self.battery:
             return recharger_path, world.recharger
 
@@ -84,14 +86,16 @@ class DefaultPlayer(BasePlayer):
               best_dist = d_goal
               best = goal
 
-        self_recharger_path, self_recharger_dist = world.astar(current_pos, world.recharger)
-        best_recharger_path, best_recharger_dist = world.astar(best, world.recharger)
+        self_recharger_path, self_recharger_dist = world.astar(
+            current_pos, world.recharger)
+        best_recharger_path, best_recharger_dist = world.astar(
+            best, world.recharger)
 
         if (best_dist + best_recharger_dist) > self.battery:
           return self_recharger_path, world.recharger
-        
+
         return best_path, best
-      
+
     elif self.cargo > 0:
       # Se estiver carregando ou não houver mais pacotes, vai para a meta de entrega (se existir)
       if world.goals:
@@ -104,8 +108,10 @@ class DefaultPlayer(BasePlayer):
             best_dist = d_goal
             best = goal
 
-        self_recharger_path, self_recharger_dist = world.astar(current_pos, world.recharger)
-        best_recharger_path, best_recharger_dist = world.astar(best, world.recharger)
+        self_recharger_path, self_recharger_dist = world.astar(
+            current_pos, world.recharger)
+        best_recharger_path, best_recharger_dist = world.astar(
+            best, world.recharger)
 
         if (best_dist + best_recharger_dist) > self.battery:
           return self_recharger_path, world.recharger
@@ -334,7 +340,7 @@ class World:
   def heuristic(self, a, b):
     # Distância de Manhattan
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
-  
+
   def astar(self, start, goal):
     maze = self.map
     size = self.maze_size
@@ -399,7 +405,8 @@ class Maze:
   def game_loop(self):
     # O jogo termina quando o número de entregas realizadas é igual ao total de itens.
     while self.running:
-      dist_recharger = self.world.heuristic(self.world.player.position, self.world.recharger)
+      dist_recharger = self.world.heuristic(
+          self.world.player.position, self.world.recharger)
       if self.num_deliveries >= self.world.total_items and (dist_recharger == 0):
         print("Entrou aqui: ", dist_recharger)
         self.running = False
